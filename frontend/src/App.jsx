@@ -7,7 +7,9 @@ import ChatInterface from "./components/ChatInterface";
 import ResumePreview from "./components/ResumePreview";
 import JobCards from "./components/JobCards";
 
-const API_BASE_URL = "http://localhost:8000";
+// In production (Render), VITE_API_BASE_URL is injected at build time to point
+// at the deployed backend. Locally, it falls back to the FastAPI dev server.
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
 export default function App() {
   const [profile, setProfile] = useState({
@@ -213,7 +215,7 @@ export default function App() {
                 apiBaseUrl={API_BASE_URL}
               />
             ) : (
-              <JobCards recommendations={recommendations} />
+              <JobCards recommendations={recommendations} profile={profile} apiBaseUrl={API_BASE_URL} />
             )}
           </div>
         </div>
