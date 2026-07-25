@@ -7,8 +7,9 @@ venv/
 # Backend data (SQLite DB, generated at runtime)
 backend/app/data/
 
-# Env / secrets
+# Env / secrets (covers backend/.env and frontend/.env)
 .env
+.env.local
 *.env.local
 
 # OS
