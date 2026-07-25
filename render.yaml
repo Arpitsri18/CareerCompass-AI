@@ -1,0 +1,31 @@
+﻿services:
+  # FastAPI backend
+  - type: web
+    name: careercompass-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: FRONTEND_ORIGIN
+        value: https://careercompass-frontend.onrender.com
+      - key: PYTHON_VERSION
+        value: 3.12.0
+    healthCheckPath: /
+
+  # React (Vite) frontend, built and served as a static site
+  - type: web
+    name: careercompass-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        value: https://careercompass-backend.onrender.com
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
