@@ -1,0 +1,20 @@
+﻿# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Backend data (SQLite DB, generated at runtime)
+backend/app/data/
+
+# Env / secrets
+.env
+*.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
