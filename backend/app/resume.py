@@ -4,6 +4,24 @@ from typing import List, Dict, Any
 from pydantic import BaseModel, Field
 import google.generativeai as genai
 from app.config import settings
+from google import genai
+from dotenv import load_dotenv
+import os
+
+# Load .env file
+load_dotenv()
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "models/gemini-3.5-flash")
+
+
+client = genai.Client(api_key=settings.GEMINI_API_KEY)
+
+response = client.models.generate_content(
+    model=settings.GEMINI_MODEL or "models/gemini-3.5-flash",
+    contents=contents
+)
+
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -51,10 +69,10 @@ Rules:
    - Skills (list of programming languages, tools, or domain skills)
    - Work Experience / Projects (Company/Project name, Role, Duration in years/months, and description)
    - Total Years of Experience (as a number)
-3. NEVER make up, invent, or assume any information about the user. Only document what the user explicitly tells you. If they say they are a fresher, record 0 years of experience and focus on personal projects/education.
+3. NEVER make up, invent, or assume any information about the user. Only document what the user explicitly tells you.
 4. If the user doesn't provide complete information for a section, ask follow-up questions politely, but do not nag.
 5. Keep your tone encouraging, conversational, and concise.
-6. When you feel you have gathered the key details (e.g. name, contact, location, education, skills, experience), politely inform the user that their profile is ready and you have updated their resume preview on the dashboard, but they can continue chatting to refine it.
+6. When you feel you have gathered the key details, politely inform the user that their profile is ready and you have updated their resume preview on the dashboard.
 """
 
 def generate_chat_response(messages: List[Dict[str, str]]) -> str:
@@ -62,24 +80,19 @@ def generate_chat_response(messages: List[Dict[str, str]]) -> str:
     Sends the chat history with system instructions to Gemini and returns the next question/response.
     """
     if not settings.GEMINI_API_KEY:
-        # Fallback Mock Mode
         return mock_chat_fallback(messages)
 
     try:
-        # We use gemini-1.5-flash as it is fast, stable, and highly capable for chat
+        # Use GEMINI_MODEL env var, fallback to 3.5 flash
         model = genai.GenerativeModel(
-            model_name="gemini-2.5-flash",
+            model_name=settings.GEMINI_MODEL or "models/gemini-3.5-flash",
             system_instruction=SYSTEM_PROMPT
         )
         
-        # Format history for Gemini API
         contents = []
         for msg in messages:
             role = "user" if msg["role"] == "user" else "model"
-            contents.append({
-                "role": role,
-                "parts": [msg["content"]]
-            })
+            contents.append({"role": role, "parts": [msg["content"]]})
             
         response = model.generate_content(contents)
         return response.text
@@ -93,12 +106,11 @@ def extract_profile_from_chat(messages: List[Dict[str, str]]) -> Dict[str, Any]:
     and format the collected details into a structured JSON profile using ProfileSchema.
     """
     if not settings.GEMINI_API_KEY:
-        # Fallback Mock Mode
         return mock_extract_fallback(messages)
 
     try:
         model = genai.GenerativeModel(
-            model_name="gemini-1.5-flash",
+            model_name=settings.GEMINI_MODEL or "models/gemini-3.5-flash",
             generation_config={
                 "response_mime_type": "application/json",
                 "response_schema": ProfileSchema,
@@ -106,7 +118,6 @@ def extract_profile_from_chat(messages: List[Dict[str, str]]) -> Dict[str, Any]:
             }
         )
         
-        # Construct a prompt for extraction
         chat_text = ""
         for msg in messages:
             chat_text += f"{msg['role'].upper()}: {msg['content']}\n"
@@ -116,7 +127,7 @@ def extract_profile_from_chat(messages: List[Dict[str, str]]) -> Dict[str, Any]:
         Extract the user's professional profile details.
         Strictly follow these guidelines:
         - Extract Name, Email, Phone, Location, Skills, Education, Experience, and Total Experience in years.
-        - Do NOT hallucinate or assume details. If a detail is missing, leave it as an empty string or empty list as defined in the schema.
+        - Do NOT hallucinate or assume details. If a detail is missing, leave it empty as defined in the schema.
         - Convert experience years to a float (e.g. '6 months' is 0.5, '2 years' is 2.0).
 
         Conversation history:
@@ -133,65 +144,34 @@ def extract_profile_from_chat(messages: List[Dict[str, str]]) -> Dict[str, Any]:
 # --- Fallbacks for Mock/Testing Mode ---
 
 def mock_chat_fallback(messages: List[Dict[str, str]]) -> str:
-    """Mock conversational chat for when API key is missing or fails."""
     user_msgs = [m for m in messages if m["role"] == "user"]
     if not user_msgs:
-        return "Hi there! I am CareerCompass AI. Let's build your professional profile and find the best job recommendations for you. What is your full name?"
+        return "Hi there! I am CareerCompass AI. Let's build your professional profile. What is your full name?"
     
-    last_user_msg = user_msgs[-1]["content"].lower()
-    
-    # Very simple keyword heuristic for testing
     if len(user_msgs) == 1:
-        return f"Nice to meet you, {user_msgs[-1]['content']}! Could you share your email address and phone number so we can put them on your resume?"
+        return f"Nice to meet you, {user_msgs[-1]['content']}! Could you share your email and phone number?"
     elif len(user_msgs) == 2:
-        return "Got it! Which city are you currently located in? (e.g., Jaipur, Indore, Coimbatore, Kochi)"
+        return "Got it! Which city are you currently located in?"
     elif len(user_msgs) == 3:
         return "Excellent! Let's talk about your education. What degree did you complete, from which college, and in what year?"
     elif len(user_msgs) == 4:
-        return "Great! What technical skills do you have? (e.g., React, Python, SQL, CSS, Figma)"
+        return "Great! What technical skills do you have?"
     elif len(user_msgs) == 5:
-        return "Awesome skills! Do you have any work experience or personal projects? Please tell me the role, company/project name, duration, and what you built."
+        return "Awesome skills! Do you have any work experience or personal projects?"
     elif len(user_msgs) == 6:
-        return "Understood. How many total years of work experience do you have? (e.g., 0 for fresher, 1.5, 3)"
+        return "Understood. How many total years of work experience do you have?"
     else:
-        return "Thank you! I have gathered all your details and generated your resume. You can check the preview and the recommended jobs on your dashboard. Feel free to refine any details!"
+        return "Thank you! I have gathered all your details and generated your resume. You can check the preview and recommended jobs on your dashboard."
 
 def mock_extract_fallback(messages: List[Dict[str, str]]) -> Dict[str, Any]:
-    """Mock extractor that attempts to pull details from chat history for testing."""
     profile = {
         "name": "Jane Doe",
         "email": "jane.doe@example.com",
         "phone": "+91 9988776655",
         "location": "Jaipur",
-        "education": [
-            {"degree": "B.Tech in Computer Science", "school": "Rajasthan Technical University", "year": "2024"}
-        ],
+        "education": [{"degree": "B.Tech in Computer Science", "school": "RTU", "year": "2024"}],
         "skills": ["React", "JavaScript", "HTML", "CSS", "Python"],
-        "experience": [
-            {"company": "AppVenture Technologies", "role": "Frontend Intern", "duration": "6 months", "description": "Built interactive UI elements."}
-        ],
+        "experience": [{"company": "AppVenture", "role": "Frontend Intern", "duration": "6 months", "description": "Built UI elements."}],
         "experience_years": 0.5
     }
-    
-    # Try simple extraction from the chat history
-    user_texts = [m["content"] for m in messages if m["role"] == "user"]
-    if len(user_texts) > 0:
-        profile["name"] = user_texts[0]
-    if len(user_texts) > 1:
-        profile["email"] = "user@example.com"
-        profile["phone"] = "+91 9000000000"
-    if len(user_texts) > 2:
-        profile["location"] = user_texts[2]
-    if len(user_texts) > 4:
-        # Extract skills (split by comma or spaces)
-        skills_text = user_texts[4]
-        skills_list = [s.strip() for s in skills_text.replace(",", " ").split() if len(s.strip()) > 1]
-        if skills_list:
-            profile["skills"] = list(set(skills_list))
-    if len(user_texts) > 6:
-        try:
-            profile["experience_years"] = float(user_texts[6])
-        except ValueError:
-            profile["experience_years"] = 1.0
-            
     return profile
